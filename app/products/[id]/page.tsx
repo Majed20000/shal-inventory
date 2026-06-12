@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '../../../components/AppShell';
-import { formatDate, normalizeName, exportToExcel, exportTransactionsToExcel } from '../../../lib/utils';
+import ErrorState from '../../../components/ErrorState';
+import LoadingState from '../../../components/LoadingState';
+import { getErrorMessage } from '../../../lib/errors';
+import { formatDate, exportToExcel, exportTransactionsToExcel } from '../../../lib/utils';
 import { Product, Transaction } from '../../../lib/types';
 import { getProductById, loadCategories, loadProductTransactions, updateProduct } from '../../../lib/db';
 
@@ -28,19 +31,27 @@ function ProductDetailsClient({ productId }: { productId: string }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     async function loadData() {
-      const item = await getProductById(productId);
-      if (item) {
-        setProduct(item);
-        setName(item.name);
-        setCategory(item.category);
-        setQuantity(String(item.quantity));
-        setNotes(item.notes);
+      try {
+        const item = await getProductById(productId);
+        if (item) {
+          setProduct(item);
+          setName(item.name);
+          setCategory(item.category);
+          setQuantity(String(item.quantity));
+          setNotes(item.notes);
+        }
+        setCategories(await loadCategories());
+        setTransactions(await loadProductTransactions(productId));
+      } catch (err) {
+        setLoadError(getErrorMessage(err));
+      } finally {
+        setLoading(false);
       }
-      setCategories(await loadCategories());
-      setTransactions(await loadProductTransactions(productId));
     }
     loadData();
   }, [productId]);
@@ -50,10 +61,26 @@ function ProductDetailsClient({ productId }: { productId: string }) {
     [category, customCategory],
   );
 
+  if (loading) {
+    return (
+      <AppShell title="تفاصيل المنتج">
+        <LoadingState />
+      </AppShell>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <AppShell title="تفاصيل المنتج">
+        <ErrorState message={loadError} />
+      </AppShell>
+    );
+  }
+
   if (!product) {
     return (
       <AppShell title="تفاصيل المنتج">
-        <div className="rounded-3xl bg-white p-6 shadow-soft text-right">لا يوجد منتج بهذا المعرف.</div>
+        <div className="card text-right">لا يوجد منتج بهذا المعرف.</div>
       </AppShell>
     );
   }
@@ -144,10 +171,10 @@ function ProductDetailsClient({ productId }: { productId: string }) {
 
   return (
     <AppShell title="تفاصيل المنتج">
-      <section className="rounded-3xl bg-white p-6 shadow-soft">
+      <section className="card">
         <form onSubmit={handleSave} className="grid gap-6">
-          {error ? <div className="rounded-2xl border border-red-300 bg-red-50 p-4 text-red-700">{error}</div> : null}
-          {message ? <div className="rounded-2xl border border-green-300 bg-green-50 p-4 text-green-700">{message}</div> : null}
+          {error ? <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-700">{error}</div> : null}
+          {message ? <div className="rounded-xl border border-green-300 bg-green-50 p-4 text-green-700">{message}</div> : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <label className="space-y-2 text-right text-sm font-medium text-slate-700">
@@ -155,7 +182,7 @@ function ProductDetailsClient({ productId }: { productId: string }) {
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+                className="input-field"
               />
             </label>
             <label className="space-y-2 text-right text-sm font-medium text-slate-700">
@@ -163,7 +190,7 @@ function ProductDetailsClient({ productId }: { productId: string }) {
               <select
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+                className="input-field"
               >
                 {categories.map((cat) => (
                   <option key={cat}>{cat}</option>
@@ -177,7 +204,7 @@ function ProductDetailsClient({ productId }: { productId: string }) {
                 <input
                   value={customCategory}
                   onChange={(event) => setCustomCategory(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+                  className="input-field"
                 />
               </label>
             ) : null}
@@ -188,7 +215,7 @@ function ProductDetailsClient({ productId }: { productId: string }) {
                 min="0"
                 value={quantity}
                 onChange={(event) => setQuantity(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+                className="input-field"
               />
             </label>
           </div>
@@ -198,64 +225,52 @@ function ProductDetailsClient({ productId }: { productId: string }) {
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+              className="input-field"
               rows={4}
             />
           </label>
 
           <div className="flex flex-wrap gap-3">
-            <button className="rounded-3xl bg-sand-500 px-6 py-3 text-white transition hover:bg-sand-600">حفظ التغييرات</button>
-            <button
-              type="button"
-              onClick={() => router.push('/products')}
-              className="rounded-3xl border border-slate-300 bg-white px-6 py-3 text-slate-700 transition hover:bg-slate-50"
-            >
+            <button type="submit" className="btn-primary !px-6 !py-3">حفظ التغييرات</button>
+            <button type="button" onClick={() => router.push('/products')} className="btn-secondary !px-6 !py-3">
               العودة للمنتجات
             </button>
           </div>
         </form>
       </section>
 
-      <section className="mt-6 rounded-3xl bg-white p-6 shadow-soft">
+      <section className="card mt-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">السجل الخاص بالمنتج</h2>
             <p className="mt-2 text-sm text-slate-500">عرض جميع العمليات المتعلقة بهذا المنتج.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={handleExportProduct}
-              className="rounded-3xl bg-sand-500 px-4 py-3 text-white transition hover:bg-sand-600"
-            >
+            <button type="button" onClick={handleExportProduct} className="btn-primary">
               تصدير المنتج
             </button>
-            <button
-              type="button"
-              onClick={handleExportTransactions}
-              className="rounded-3xl border border-sand-300 bg-white px-4 py-3 text-slate-700 transition hover:bg-sand-100"
-            >
+            <button type="button" onClick={handleExportTransactions} className="btn-secondary">
               تصدير السجل
             </button>
           </div>
         </div>
 
-        <div className="mt-6 overflow-x-auto">
-          <table className="min-w-full text-right">
-            <thead className="bg-sand-100 text-slate-700">
+        <div className="mt-6 table-shell">
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-sm">التاريخ</th>
-                <th className="px-4 py-3 text-sm">نوع العملية</th>
-                <th className="px-4 py-3 text-sm">الكمية قبل</th>
-                <th className="px-4 py-3 text-sm">التغيير</th>
-                <th className="px-4 py-3 text-sm">الكمية بعد</th>
-                <th className="px-4 py-3 text-sm">ملاحظات</th>
+                <th>التاريخ</th>
+                <th>نوع العملية</th>
+                <th>قبل</th>
+                <th>التغيير</th>
+                <th>بعد</th>
+                <th>ملاحظات</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 bg-white">
+            <tbody>
               {transactions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
                     لا توجد عمليات لهذا المنتج.
                   </td>
                 </tr>
@@ -265,12 +280,14 @@ function ProductDetailsClient({ productId }: { productId: string }) {
                   .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
                   .map((txn) => (
                     <tr key={txn.id}>
-                      <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDate(txn.createdAt)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{txn.operationType}</td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{txn.quantityBefore}</td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{txn.quantityChange}</td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{txn.quantityAfter}</td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{txn.notes}</td>
+                      <td className="whitespace-nowrap">{formatDate(txn.createdAt)}</td>
+                      <td>{txn.operationType}</td>
+                      <td>{txn.quantityBefore}</td>
+                      <td className={txn.quantityChange >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                        {txn.quantityChange > 0 ? `+${txn.quantityChange}` : txn.quantityChange}
+                      </td>
+                      <td className="font-medium">{txn.quantityAfter}</td>
+                      <td>{txn.notes || '—'}</td>
                     </tr>
                   ))
               )}

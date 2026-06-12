@@ -3,12 +3,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '../../../components/AppShell';
-import { addOrUpdateProduct, loadCategories } from '../../../lib/db';
-
+import ErrorState from '../../../components/ErrorState';
+import LoadingState from '../../../components/LoadingState';
+import ProductNameInput from '../../../components/ProductNameInput';
+import { getErrorMessage } from '../../../lib/errors';
+import { addOrUpdateProduct, loadCategories, loadProducts } from '../../../lib/db';
+import { Product } from '../../../lib/types';
+import { normalizeName } from '../../../lib/utils';
 
 export default function NewProductPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<string[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('شماغ');
   const [customCategory, setCustomCategory] = useState('');
@@ -16,15 +22,41 @@ export default function NewProductPage() {
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     async function load() {
-      setCategories(await loadCategories());
+      try {
+        const [loadedCategories, loadedProducts] = await Promise.all([loadCategories(), loadProducts()]);
+        setCategories(loadedCategories);
+        setProducts(loadedProducts);
+      } catch (err) {
+        setLoadError(getErrorMessage(err));
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
 
-  const selectedCategory = useMemo(() => (category === 'أخرى' ? customCategory.trim() || 'أخرى' : category), [category, customCategory]);
+  const selectedCategory = useMemo(
+    () => (category === 'أخرى' ? customCategory.trim() || 'أخرى' : category),
+    [category, customCategory],
+  );
+
+  const matchedProduct = useMemo(() => {
+    const normalized = normalizeName(name);
+    if (!normalized) return null;
+    return products.find((product) => !product.deletedAt && normalizeName(product.name) === normalized) ?? null;
+  }, [name, products]);
+
+  const handleSelectProduct = (product: Product) => {
+    setCategory(categories.includes(product.category) ? product.category : 'أخرى');
+    if (!categories.includes(product.category)) {
+      setCustomCategory(product.category);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -45,11 +77,14 @@ export default function NewProductPage() {
       return;
     }
 
-    const categoryValue = selectedCategory;
-    const result = await addOrUpdateProduct(trimmedName, categoryValue, currentQuantity, notes.trim());
+    const result = await addOrUpdateProduct(trimmedName, selectedCategory, currentQuantity, notes.trim());
 
     if (result.product) {
-      setMessage(result.transaction?.operationType === 'زيادة كمية' ? 'المنتج موجود مسبقًا، وتم تحديث الكمية.' : 'تم إضافة المنتج بنجاح.');
+      setMessage(
+        result.transaction?.operationType === 'زيادة كمية'
+          ? 'المنتج موجود مسبقًا، وتم تحديث الكمية.'
+          : 'تم إضافة المنتج بنجاح.',
+      );
       setName('');
       setQuantity('');
       setNotes('');
@@ -62,28 +97,59 @@ export default function NewProductPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <AppShell title="إضافة منتج جديد">
+        <LoadingState />
+      </AppShell>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <AppShell title="إضافة منتج جديد">
+        <ErrorState message={loadError} />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell title="إضافة منتج جديد">
-      <section className="rounded-3xl bg-white p-6 shadow-soft">
+      <section className="card">
         <form onSubmit={handleSubmit} className="grid gap-5">
-          {error ? <div className="rounded-2xl border border-red-300 bg-red-50 p-4 text-red-700">{error}</div> : null}
-          {message ? <div className="rounded-2xl border border-green-300 bg-green-50 p-4 text-green-700">{message}</div> : null}
+          {error ? <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-700">{error}</div> : null}
+          {message ? <div className="rounded-xl border border-green-300 bg-green-50 p-4 text-green-700">{message}</div> : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <label className="space-y-2 text-right text-sm font-medium text-slate-700">
               اسم المنتج
-              <input
+              <ProductNameInput
                 value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+                onChange={setName}
+                products={products}
+                onSelectProduct={handleSelectProduct}
               />
+              <span className="block text-xs font-normal text-slate-500">
+                اكتب الاسم لعرض منتجات موجودة — اختر واحدًا لإضافة كمية له
+              </span>
             </label>
+
+            {matchedProduct ? (
+              <div className="rounded-xl border border-sand-300 bg-sand-50 p-4 text-sm text-sand-900 lg:col-span-2">
+                <p className="font-semibold">منتج موجود في المخزون</p>
+                <p className="mt-1 text-sand-800">
+                  التصنيف: {matchedProduct.category} · الكمية الحالية: {matchedProduct.quantity}
+                </p>
+                <p className="mt-1 text-xs text-sand-700">سيتم إضافة الكمية المدخلة إلى المخزون الحالي عند الحفظ.</p>
+              </div>
+            ) : null}
+
             <label className="space-y-2 text-right text-sm font-medium text-slate-700">
               التصنيف
               <select
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+                className="input-field"
               >
                 {categories.map((cat) => (
                   <option key={cat}>{cat}</option>
@@ -91,25 +157,26 @@ export default function NewProductPage() {
                 <option>أخرى</option>
               </select>
             </label>
+
             {category === 'أخرى' ? (
               <label className="space-y-2 text-right text-sm font-medium text-slate-700">
                 اسم التصنيف الجديد
                 <input
                   value={customCategory}
                   onChange={(event) => setCustomCategory(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+                  className="input-field"
                 />
               </label>
             ) : null}
 
             <label className="space-y-2 text-right text-sm font-medium text-slate-700">
-              الكمية
+              الكمية {matchedProduct ? '(تُضاف إلى المخزون)' : ''}
               <input
                 type="number"
                 min="1"
                 value={quantity}
                 onChange={(event) => setQuantity(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+                className="input-field"
               />
             </label>
           </div>
@@ -119,16 +186,16 @@ export default function NewProductPage() {
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-right outline-none focus:border-sand-400"
+              className="input-field"
               rows={4}
             />
           </label>
 
           <div className="flex flex-wrap gap-3">
-            <button className="rounded-3xl bg-sand-500 px-6 py-3 text-white transition hover:bg-sand-600">
-              إضافة المنتج
+            <button type="submit" className="btn-primary !px-6 !py-3">
+              {matchedProduct ? 'إضافة الكمية' : 'إضافة المنتج'}
             </button>
-            <button type="button" onClick={() => router.push('/products')} className="rounded-3xl border border-slate-300 bg-white px-6 py-3 text-slate-700 transition hover:bg-slate-50">
+            <button type="button" onClick={() => router.push('/products')} className="btn-secondary !px-6 !py-3">
               إلغاء
             </button>
           </div>

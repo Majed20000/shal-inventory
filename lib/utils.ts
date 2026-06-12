@@ -23,6 +23,17 @@ export function formatDate(value: string) {
   });
 }
 
+export function formatDateLatin(value: string) {
+  const date = new Date(value);
+  return new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 export function createId(prefix = 'id') {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -71,5 +82,14 @@ export function exportTransactionsToExcel(columns: string[], rows: Array<Record<
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'سجل العمليات');
   const filename = `alshal_alarabi_transactions_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  XLSX.writeFile(workbook, filename);
+}
+
+export function exportPaymentsToExcel(columns: string[], rows: Array<Record<string, string | number>>) {
+  const XLSX = require('xlsx');
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: columns });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'المصاريف والمدفوعات');
+  const filename = `alshal_alarabi_payments_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(workbook, filename);
 }

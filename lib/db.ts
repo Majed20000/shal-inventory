@@ -1,51 +1,46 @@
 import { supabase } from './supabase';
 import { Product, Transaction } from './types';
+import { Payment } from './types';
 import { createId, normalizeName, defaultCategories } from './utils';
-import * as storage from './storage';
 
-function isSupabaseSchemaCacheError(error: any): boolean {
-  return (
-    !!error &&
-    typeof error.message === 'string' &&
-    (error.message.includes('schema cache') || error.message.includes('Could not find the table'))
-  );
-}
-
-function mapProductRow(row: any): Product {
-  return {
-    id: row.id,
-    name: row.name,
-    normalizedName: row.normalizedName || row.normalized_name || row.normalizedname,
-    category: row.category,
-    quantity: Number(row.quantity),
-    notes: row.notes || '',
-    createdAt: row.createdAt || row.created_at || row.createdat,
-    updatedAt: row.updatedAt || row.updated_at || row.updatedat,
-    deletedAt: row.deletedAt || row.deleted_at || row.deletedat || undefined,
-  };
-}
-
-function mapTransactionRow(row: any): Transaction {
+function mapProductRow(row: Record<string, unknown>): Product {
   return {
     id: String(row.id),
-    productId: String(row.productId || row.product_id || row.productid),
-    productName: row.productName || row.product_name || row.productname,
-    category: row.category,
-    operationType: row.operationType || row.operation_type || row.operationtype,
-    quantityBefore: Number(row.quantityBefore ?? row.quantity_before ?? row.quantitybefore ?? 0),
-    quantityChange: Number(row.quantityChange ?? row.quantity_change ?? row.quantitychange ?? 0),
-    quantityAfter: Number(row.quantityAfter ?? row.quantity_after ?? row.quantityafter ?? 0),
-    notes: row.notes || '',
-    createdAt: row.createdAt || row.created_at || row.createdat,
+    name: String(row.name),
+    normalizedName: String(row.normalizedName ?? row.normalized_name ?? ''),
+    category: String(row.category),
+    quantity: Number(row.quantity),
+    notes: String(row.notes || ''),
+    createdAt: String(row.createdAt ?? row.created_at ?? ''),
+    updatedAt: String(row.updatedAt ?? row.updated_at ?? ''),
+    deletedAt: row.deletedAt || row.deleted_at ? String(row.deletedAt ?? row.deleted_at) : undefined,
   };
+}
+
+function mapTransactionRow(row: Record<string, unknown>): Transaction {
+  return {
+    id: String(row.id),
+    productId: String(row.productId ?? row.product_id ?? ''),
+    productName: String(row.productName ?? row.product_name ?? ''),
+    category: String(row.category),
+    operationType: String(row.operationType ?? row.operation_type ?? ''),
+    quantityBefore: Number(row.quantityBefore ?? row.quantity_before ?? 0),
+    quantityChange: Number(row.quantityChange ?? row.quantity_change ?? 0),
+    quantityAfter: Number(row.quantityAfter ?? row.quantity_after ?? 0),
+    notes: String(row.notes || ''),
+    createdAt: String(row.createdAt ?? row.created_at ?? ''),
+  };
+}
+
+function requireSupabase() {
+  if (!supabase) {
+    throw new Error('SUPABASE_NOT_CONFIGURED');
+  }
+  return supabase;
 }
 
 export async function loadProducts(): Promise<Product[]> {
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
-  const client = supabase;
+  const client = requireSupabase();
   const { data, error } = await client
     .from('products')
     .select('*')
@@ -61,11 +56,7 @@ export async function loadProducts(): Promise<Product[]> {
 }
 
 export async function loadTransactions(): Promise<Transaction[]> {
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
-  const client = supabase;
+  const client = requireSupabase();
   const { data, error } = await client
     .from('transactions')
     .select('*')
@@ -80,11 +71,7 @@ export async function loadTransactions(): Promise<Transaction[]> {
 }
 
 export async function loadCategories(): Promise<string[]> {
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
-  const client = supabase;
+  const client = requireSupabase();
   const { data, error } = await client
     .from('products')
     .select('category')
@@ -95,8 +82,14 @@ export async function loadCategories(): Promise<string[]> {
     throw error || new Error('Failed to load categories');
   }
 
-  const categories = Array.from(new Set(data.map((item: any) => item.category || '').filter(Boolean)));
-  return categories.length ? categories : defaultCategories;
+  const fromDb = Array.from(new Set(data.map((item) => String(item.category || '')).filter(Boolean)));
+  const merged = [...defaultCategories];
+  for (const cat of fromDb) {
+    if (cat && cat !== 'أخرى' && !merged.includes(cat)) {
+      merged.push(cat);
+    }
+  }
+  return merged;
 }
 
 export async function addOrUpdateProduct(
@@ -107,12 +100,8 @@ export async function addOrUpdateProduct(
 ): Promise<{ product: Product | null; transaction: Transaction | null; error?: string }> {
   const normalizedName = normalizeName(name);
   const now = new Date().toISOString();
+  const client = requireSupabase();
 
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
-  const client = supabase;
   const { data: existingRows, error: existingError } = await client
     .from('products')
     .select('*')
@@ -127,8 +116,8 @@ export async function addOrUpdateProduct(
   }
 
   if (existingRows) {
-    const quantityBefore = existingRows.quantity;
-    const quantityAfter = existingRows.quantity + quantity;
+    const quantityBefore = Number(existingRows.quantity);
+    const quantityAfter = quantityBefore + quantity;
     const { data: updatedRows, error: updateError } = await client
       .from('products')
       .update({ quantity: quantityAfter, updatedAt: now, notes: notes.trim() || existingRows.notes })
@@ -143,7 +132,7 @@ export async function addOrUpdateProduct(
 
     const transaction: Transaction = {
       id: createId('txn'),
-      productId: existingRows.id,
+      productId: String(existingRows.id),
       productName: name,
       category,
       operationType: 'زيادة كمية',
@@ -176,7 +165,7 @@ export async function addOrUpdateProduct(
     .insert({
       id: productId,
       name,
-      normalizedName: normalizedName,
+      normalizedName,
       category,
       quantity,
       notes,
@@ -226,11 +215,7 @@ export async function addOrUpdateProduct(
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
-  const client = supabase;
+  const client = requireSupabase();
   const { data, error } = await client
     .from('products')
     .select('*')
@@ -240,7 +225,7 @@ export async function getProductById(id: string): Promise<Product | null> {
 
   if (error || !data) {
     console.error('Supabase getProductById error', error);
-    throw error || new Error('Product not found');
+    return null;
   }
 
   return mapProductRow(data);
@@ -256,12 +241,8 @@ export async function updateProduct(
 ): Promise<{ product: Product | null; transaction: Transaction | null }> {
   const normalizedName = normalizeName(name);
   const now = new Date().toISOString();
+  const client = requireSupabase();
 
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
-  const client = supabase;
   const { data: duplicate, error: duplicateError } = await client
     .from('products')
     .select('id')
@@ -284,7 +265,7 @@ export async function updateProduct(
     .from('products')
     .update({
       name,
-      normalizedName: normalizedName,
+      normalizedName,
       category,
       quantity,
       notes,
@@ -329,21 +310,21 @@ export async function updateProduct(
 }
 
 export async function deleteProduct(productId: string, product: Product): Promise<void> {
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
-  const client = supabase;
+  const client = requireSupabase();
   const now = new Date().toISOString();
-  const { error: deleteError } = await client.from('products').update({ deletedAt: now, updatedAt: now }).eq('id', productId);
+  const { error: deleteError } = await client
+    .from('products')
+    .update({ deletedAt: now, updatedAt: now })
+    .eq('id', productId);
+
   if (deleteError) {
     console.error('Supabase deleteProduct error', deleteError);
     throw deleteError;
   }
 
-  const { error: transactionError } = await client.from('transactions').insert({
+  await client.from('transactions').insert({
     id: createId('txn'),
-    productId: productId,
+    productId,
     productName: product.name,
     category: product.category,
     operationType: 'حذف منتج',
@@ -356,11 +337,7 @@ export async function deleteProduct(productId: string, product: Product): Promis
 }
 
 export async function loadProductTransactions(productId: string): Promise<Transaction[]> {
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
-  const client = supabase;
+  const client = requireSupabase();
   const { data, error } = await client
     .from('transactions')
     .select('*')
@@ -375,3 +352,68 @@ export async function loadProductTransactions(productId: string): Promise<Transa
   return data.map(mapTransactionRow);
 }
 
+function mapPaymentRow(row: Record<string, unknown>): Payment {
+  return {
+    id: String(row.id),
+    amount: Number(row.amount),
+    note: String(row.note || ''),
+    createdAt: String(row.createdAt ?? row.created_at ?? ''),
+    updatedAt: row.updatedAt || row.updated_at ? String(row.updatedAt ?? row.updated_at) : undefined,
+    deletedAt: row.deletedAt || row.deleted_at ? String(row.deletedAt ?? row.deleted_at) : undefined,
+  };
+}
+
+export async function loadPayments(): Promise<Payment[]> {
+  const client = requireSupabase();
+  const { data, error } = await client.from('payments').select('*').is('deletedAt', null).order('createdAt', { ascending: false });
+
+  if (error || !data) {
+    console.error('Supabase loadPayments error', error);
+    throw error || new Error('Failed to load payments');
+  }
+
+  return data.map(mapPaymentRow);
+}
+
+export async function addPayment(amount: number, note = '', createdAt?: string): Promise<Payment | null> {
+  const client = requireSupabase();
+  const now = createdAt ?? new Date().toISOString();
+  const id = createId('pay');
+  const { data, error } = await client
+    .from('payments')
+    .insert({ id, amount, note, createdAt: now, updatedAt: now })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Supabase addPayment error', error);
+    throw error;
+  }
+
+  return mapPaymentRow(data);
+}
+
+export async function updatePayment(paymentId: string, amount: number, note = '', createdAt?: string): Promise<Payment | null> {
+  const client = requireSupabase();
+  const now = new Date().toISOString();
+  const updates: Record<string, unknown> = { amount, note, updatedAt: now };
+  if (createdAt) updates.createdAt = createdAt;
+
+  const { data, error } = await client.from('payments').update(updates).eq('id', paymentId).select().single();
+  if (error) {
+    console.error('Supabase updatePayment error', error);
+    throw error;
+  }
+
+  return mapPaymentRow(data);
+}
+
+export async function deletePayment(paymentId: string): Promise<void> {
+  const client = requireSupabase();
+  const now = new Date().toISOString();
+  const { error } = await client.from('payments').update({ deletedAt: now, updatedAt: now }).eq('id', paymentId);
+  if (error) {
+    console.error('Supabase deletePayment error', error);
+    throw error;
+  }
+}

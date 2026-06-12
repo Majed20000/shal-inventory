@@ -24,3 +24,12 @@ export interface Transaction {
   notes: string;
   createdAt: string;
 }
+
+export interface Payment {
+  id: string;
+  amount: number;
+  note: string;
+  createdAt: string;
+  updatedAt?: string;
+  deletedAt?: string;
+}

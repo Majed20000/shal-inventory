@@ -1,10 +1,11 @@
 # Alshal Alarabi Inventory System
 
-نظام إدارة منتجات ومخزون محل الشال العربي.
+نظام إدارة منتجات ومخزون محل الشال العربي — **بيانات مشتركة عبر السحابة**.
 
 ## الوصف
 
-تطبيق ويب لإدارة المنتجات والكميات وسجل العمليات مع دعم اللغة العربية واتجاه RTL.
+تطبيق ويب لإدارة المنتجات والكميات وسجل العمليات مع دعم اللغة العربية واتجاه RTL.  
+البيانات محفوظة في **Supabase** حتى يتمكن أكثر من شخص من استخدام نفس المخزون عبر الرابط المباشر.
 
 ## التقنيات المستخدمة
 
@@ -12,69 +13,51 @@
 - React
 - TypeScript
 - Tailwind CSS
+- Supabase (قاعدة بيانات سحابية)
 - XLSX لتصدير Excel
 
-## التشغيل محليًا
+## إعداد Supabase (مطلوب)
 
-1. افتح الطرفية في مجلد المشروع.
-2. ثبّت الحزم:
-   ```bash
-   npm install
-   ```
-3. شغّل التطبيق:
-   ```bash
-   npm run dev
-   ```
-4. افتح المتصفح على:
-   ```bash
-   http://localhost:3000
-   ```
+1. أنشئ حسابًا في [supabase.com](https://supabase.com).
+2. أنشئ مشروعًا جديدًا (Free Tier).
+3. من **SQL Editor** نفّذ محتوى الملف `supabase/schema.sql`.
+4. من **Project Settings → API** انسخ:
+   - `Project URL`
+   - `anon public` key
+5. أنشئ ملف `.env.local` (محليًا) أو أضف المتغيرات في **Vercel → Environment Variables**:
 
-## ملاحظات
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-- التطبيق يستخدم `localStorage` لحفظ البيانات محليًا إذا لم يكن Supabase مفعلاً.
-- لإضافة دعم قاعدة بيانات، يمكن ربط التطبيق مع Supabase.
+6. أعد نشر المشروع على Vercel بعد إضافة المتغيرات.
 
-## إعداد Supabase
+## المشاركة مع آخرين
 
-1. أنشئ حسابًا في https://supabase.com.
-2. أنشئ مشروع جديد واختر Free Tier.
-3. في علامة `Table Editor` أنشئ جدولًا باسم `products` وحقول:
-   - `id` (text, primary key)
-   - `name` (text)
-   - `normalized_name` (text)
-   - `category` (text)
-   - `quantity` (integer)
-   - `notes` (text)
-   - `created_at` (timestamp)
-   - `updated_at` (timestamp)
-   - `deleted_at` (timestamp, nullable)
-4. أنشئ جدولًا باسم `transactions` وحقول:
-   - `id` (text, primary key)
-   - `product_id` (text)
-   - `product_name` (text)
-   - `category` (text)
-   - `operation_type` (text)
-   - `quantity_before` (integer)
-   - `quantity_change` (integer)
-   - `quantity_after` (integer)
-   - `notes` (text)
-   - `created_at` (timestamp)
-5. انسخ `SUPABASE_URL` و `SUPABASE_ANON_KEY` من إعدادات المشروع.
-6. أنشئ ملف `.env.local` في جذر المشروع وضع القيم:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-   ```
+شارك الرابط المباشر للتطبيق (مثل `https://shal-inventory.vercel.app`) — أي شخص يفتحه يرى ويعدّل **نفس البيانات** لأنها في قاعدة بيانات مشتركة.
+
+## التشغيل للتطوير المحلي
+
+```bash
+npm install
+cp .env.example .env.local
+# عدّل القيم في .env.local
+npm run dev
+```
+
+ثم افتح `http://localhost:3000` — يستخدم نفس قاعدة البيانات السحابية (ليس تخزينًا محليًا).
 
 ## النشر
 
-يمكن رفع هذا المشروع إلى GitHub ثم نشره على Vercel.
+المشروع منشور على GitHub و Vercel. أي تعديل على فرع `main` يُحدّث الموقع تلقائيًا.
 
 ## ملفات مهمة
 
-- `app/page.tsx`: لوحة التحكم.
-- `app/products/page.tsx`: عرض المنتجات.
-- `app/products/new/page.tsx`: إضافة منتج.
-- `app/products/[id]/page.tsx`: تفاصيل المنتج.
-- `app/transactions/page.tsx`: سجل العمليات.
+- `app/page.tsx`: لوحة التحكم
+- `app/products/page.tsx`: عرض المنتجات
+- `app/products/new/page.tsx`: إضافة منتج
+- `app/products/[id]/page.tsx`: تفاصيل المنتج
+- `app/transactions/page.tsx`: سجل العمليات
+- `lib/db.ts`: عمليات قاعدة البيانات
+- `supabase/schema.sql`: إنشاء الجداول
