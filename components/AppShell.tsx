@@ -14,11 +14,18 @@ const navItems = [
   { href: '/products/new', label: 'إضافة منتج' },
   { href: '/transactions', label: 'سجل العمليات' },
   { href: '/payments', label: 'المصاريف والمدفوعات' },
+  { href: '/sales', label: 'المبيعات' },
 ];
 
 function isActive(pathname: string, href: string) {
   if (href === '/') return pathname === '/';
-  return pathname === href || pathname.startsWith(`${href}/`);
+  if (pathname === href) return true;
+  // if pathname starts with href + '/' then it's a nested route —
+  // mark parent active only when there is no exact nav item for the pathname
+  if (pathname.startsWith(`${href}/`)) {
+    return !navItems.some((n) => n.href === pathname);
+  }
+  return false;
 }
 
 export default function AppShell({ title, children }: AppShellProps) {

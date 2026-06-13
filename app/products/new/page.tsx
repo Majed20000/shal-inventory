@@ -19,6 +19,7 @@ export default function NewProductPage() {
   const [category, setCategory] = useState('شماغ');
   const [customCategory, setCustomCategory] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [cost, setCost] = useState('');
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -72,12 +73,18 @@ export default function NewProductPage() {
       setError('الرجاء اختيار التصنيف.');
       return;
     }
+    const currentCost = cost ? Number(cost) : undefined;
     if (!quantity || isNaN(currentQuantity) || currentQuantity <= 0) {
       setError('الرجاء إدخال كمية صحيحة.');
       return;
     }
 
-    const result = await addOrUpdateProduct(trimmedName, selectedCategory, currentQuantity, notes.trim());
+    if (cost && (isNaN(Number(cost)) || Number(cost) < 0)) {
+      setError('الرجاء إدخال سعر/تكلفة صحيحة أو اتركها فارغة.');
+      return;
+    }
+
+    const result = await addOrUpdateProduct(trimmedName, selectedCategory, currentQuantity, notes.trim(), currentCost);
 
     if (result.product) {
       setMessage(
@@ -176,6 +183,18 @@ export default function NewProductPage() {
                 min="1"
                 value={quantity}
                 onChange={(event) => setQuantity(event.target.value)}
+                className="input-field"
+              />
+            </label>
+
+            <label className="space-y-2 text-right text-sm font-medium text-slate-700">
+              سعر/تكلفة الوحدة (اختياري)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={cost}
+                onChange={(event) => setCost(event.target.value)}
                 className="input-field"
               />
             </label>

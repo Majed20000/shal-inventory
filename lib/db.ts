@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { Product, Transaction } from './types';
-import { Payment } from './types';
+import { Payment, Sale, SaleItem } from './types';
 import { createId, normalizeName, defaultCategories } from './utils';
 
 function mapProductRow(row: Record<string, unknown>): Product {
@@ -10,6 +10,7 @@ function mapProductRow(row: Record<string, unknown>): Product {
     normalizedName: String(row.normalizedName ?? row.normalized_name ?? ''),
     category: String(row.category),
     quantity: Number(row.quantity),
+    cost: row.cost !== undefined && row.cost !== null ? Number(row.cost) : Number(row.price ?? 0),
     notes: String(row.notes || ''),
     createdAt: String(row.createdAt ?? row.created_at ?? ''),
     updatedAt: String(row.updatedAt ?? row.updated_at ?? ''),
@@ -97,6 +98,7 @@ export async function addOrUpdateProduct(
   category: string,
   quantity: number,
   notes: string,
+  cost?: number,
 ): Promise<{ product: Product | null; transaction: Transaction | null; error?: string }> {
   const normalizedName = normalizeName(name);
   const now = new Date().toISOString();
@@ -120,7 +122,12 @@ export async function addOrUpdateProduct(
     const quantityAfter = quantityBefore + quantity;
     const { data: updatedRows, error: updateError } = await client
       .from('products')
-      .update({ quantity: quantityAfter, updatedAt: now, notes: notes.trim() || existingRows.notes })
+      .update({
+        quantity: quantityAfter,
+        updatedAt: now,
+        notes: notes.trim() || existingRows.notes,
+        cost: typeof cost === 'number' && !Number.isNaN(cost) ? cost : existingRows.cost ?? existingRows.price,
+      })
       .eq('id', existingRows.id)
       .select()
       .single();
@@ -169,6 +176,7 @@ export async function addOrUpdateProduct(
       category,
       quantity,
       notes,
+      cost: typeof cost === 'number' && !Number.isNaN(cost) ? cost : undefined,
       createdAt: now,
       updatedAt: now,
     })
@@ -414,6 +422,187 @@ export async function deletePayment(paymentId: string): Promise<void> {
   const { error } = await client.from('payments').update({ deletedAt: now, updatedAt: now }).eq('id', paymentId);
   if (error) {
     console.error('Supabase deletePayment error', error);
+    throw error;
+  }
+}
+
+function mapSaleItemRow(row: Record<string, unknown>): SaleItem {
+  return {
+    id: String(row.id),
+    saleId: String(row.saleId ?? row.sale_id ?? ''),
+    productId: row.productId || row.product_id ? String(row.productId ?? row.product_id) : undefined,
+    productName: String(row.productName ?? row.product_name ?? ''),
+    quantity: Number(row.quantity),
+    price: Number(row.price),
+    total: Number(row.total),
+  };
+}
+
+function mapSaleRow(row: Record<string, unknown>): Sale {
+  return {
+    id: String(row.id),
+    type: String(row.type) as 'detailed' | 'quick',
+    description: String(row.description || ''),
+    totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
+    createdAt: String(row.createdAt ?? row.created_at ?? ''),
+    updatedAt: row.updatedAt || row.updated_at ? String(row.updatedAt ?? row.updated_at) : undefined,
+    deletedAt: row.deletedAt || row.deleted_at ? String(row.deletedAt ?? row.deleted_at) : undefined,
+  };
+}
+
+export async function loadSales(): Promise<(Sale & { items?: SaleItem[] })[]> {
+  const client = requireSupabase();
+  const { data, error } = await client.from('sales').select('*').is('deletedAt', null).order('createdAt', { ascending: false });
+  if (error || !data) {
+    console.error('Supabase loadSales error', error);
+    throw error || new Error('Failed to load sales');
+  }
+
+  const sales = data.map(mapSaleRow);
+
+  // load items for these sales
+  const saleIds = sales.map((s) => s.id);
+  if (saleIds.length === 0) return sales;
+  const { data: itemsData, error: itemsError } = await client.from('sale_items').select('*').in('saleId', saleIds);
+  if (itemsError) {
+    console.error('Supabase loadSales items error', itemsError);
+    throw itemsError;
+  }
+
+  const items = (itemsData || []).map(mapSaleItemRow);
+  return sales.map((s) => ({ ...s, items: items.filter((it) => it.saleId === s.id) }));
+}
+
+export async function addDetailedSale(items: { productId?: string; productName: string; quantity: number; price: number }[], description = '', createdAt?: string): Promise<Sale | null> {
+  const client = requireSupabase();
+  const now = createdAt ?? new Date().toISOString();
+  const saleId = createId('sale');
+
+  // validate stock and prepare updates
+  for (const it of items) {
+    if (it.productId) {
+      const { data: prod, error: prodError } = await client.from('products').select('*').eq('id', it.productId).is('deletedAt', null).maybeSingle();
+      if (prodError) {
+        console.error('Supabase addDetailedSale product fetch error', prodError);
+        throw prodError;
+      }
+      if (!prod) {
+        throw new Error('product_not_found');
+      }
+      const available = Number(prod.quantity || 0);
+      if (it.quantity > available) {
+        throw new Error('insufficient_stock');
+      }
+    }
+  }
+
+  const totalAmount = items.reduce((s, it) => s + it.quantity * it.price, 0);
+
+  const { data: saleData, error: saleError } = await client.from('sales').insert({ id: saleId, type: 'detailed', description, totalAmount, createdAt: now, updatedAt: now }).select().single();
+  if (saleError) {
+    console.error('Supabase addDetailedSale sale insert error', saleError);
+    throw saleError;
+  }
+
+  // insert items and update products + transactions
+  for (const it of items) {
+    const itemId = createId('sitem');
+    const total = it.quantity * it.price;
+    const { error: insertItemErr } = await client.from('sale_items').insert({ id: itemId, saleId, productId: it.productId, productName: it.productName, quantity: it.quantity, price: it.price, total });
+    if (insertItemErr) {
+      console.error('Supabase addDetailedSale insert item error', insertItemErr);
+      throw insertItemErr;
+    }
+
+    if (it.productId) {
+      // reduce product quantity and insert transaction
+      const { data: prod, error: prodError } = await client.from('products').select('*').eq('id', it.productId).is('deletedAt', null).maybeSingle();
+      if (prodError) {
+        console.error('Supabase addDetailedSale product fetch error', prodError);
+        throw prodError;
+      }
+      if (!prod) continue;
+      const quantityBefore = Number(prod.quantity || 0);
+      const quantityAfter = quantityBefore - it.quantity;
+      const { error: updateErr } = await client.from('products').update({ quantity: quantityAfter, updatedAt: now }).eq('id', it.productId);
+      if (updateErr) {
+        console.error('Supabase addDetailedSale product update error', updateErr);
+        throw updateErr;
+      }
+
+      await client.from('transactions').insert({
+        id: createId('txn'),
+        productId: it.productId,
+        productName: it.productName,
+        category: prod.category,
+        operationType: 'بيع',
+        quantityBefore,
+        quantityChange: -it.quantity,
+        quantityAfter,
+        notes: `بيع - ${description}`,
+        createdAt: now,
+      });
+    }
+  }
+
+  return mapSaleRow(saleData);
+}
+
+export async function addQuickSale(amount: number, description = '', createdAt?: string): Promise<Sale | null> {
+  const client = requireSupabase();
+  const now = createdAt ?? new Date().toISOString();
+  const id = createId('sale');
+  const { data, error } = await client.from('sales').insert({ id, type: 'quick', description, totalAmount: amount, createdAt: now, updatedAt: now }).select().single();
+  if (error) {
+    console.error('Supabase addQuickSale error', error);
+    throw error;
+  }
+  return mapSaleRow(data);
+}
+
+export async function deleteSale(saleId: string): Promise<void> {
+  const client = requireSupabase();
+  const now = new Date().toISOString();
+
+  // load items for sale
+  const { data: itemsData, error: itemsError } = await client.from('sale_items').select('*').eq('saleId', saleId);
+  if (itemsError) {
+    console.error('Supabase deleteSale items fetch error', itemsError);
+    throw itemsError;
+  }
+
+  // restore inventory for detailed items
+  for (const it of (itemsData || [])) {
+    if (it.productId) {
+      const { data: prod, error: prodError } = await client.from('products').select('*').eq('id', it.productId).maybeSingle();
+      if (prodError) {
+        console.error('Supabase deleteSale product fetch error', prodError);
+        throw prodError;
+      }
+      if (!prod) continue;
+      const quantityBefore = Number(prod.quantity || 0);
+      const quantityAfter = quantityBefore + Number(it.quantity || 0);
+      await client.from('products').update({ quantity: quantityAfter, updatedAt: now }).eq('id', it.productId);
+      await client.from('transactions').insert({
+        id: createId('txn'),
+        productId: it.productId,
+        productName: it.productName,
+        category: prod.category,
+        operationType: 'استرجاع بعد حذف بيع',
+        quantityBefore,
+        quantityChange: Number(it.quantity || 0),
+        quantityAfter,
+        notes: `استرجاع بعد حذف بيع ${saleId}`,
+        createdAt: now,
+      });
+    }
+  }
+
+  // soft-delete sale and its items
+  await client.from('sale_items').update({ deletedAt: now }).eq('saleId', saleId);
+  const { error } = await client.from('sales').update({ deletedAt: now, updatedAt: now }).eq('id', saleId);
+  if (error) {
+    console.error('Supabase deleteSale error', error);
     throw error;
   }
 }

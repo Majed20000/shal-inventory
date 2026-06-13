@@ -14,7 +14,7 @@ export function normalizeName(value: string) {
 
 export function formatDate(value: string) {
   const date = new Date(value);
-  return date.toLocaleString('ar-EG', {
+  return date.toLocaleString('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -25,7 +25,7 @@ export function formatDate(value: string) {
 
 export function formatDateLatin(value: string) {
   const date = new Date(value);
-  return new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
+  return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -91,5 +91,14 @@ export function exportPaymentsToExcel(columns: string[], rows: Array<Record<stri
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'المصاريف والمدفوعات');
   const filename = `alshal_alarabi_payments_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  XLSX.writeFile(workbook, filename);
+}
+
+export function exportSalesToExcel(columns: string[], rows: Array<Record<string, string | number>>) {
+  const XLSX = require('xlsx');
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: columns });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'المبيعات');
+  const filename = `alshal_alarabi_sales_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(workbook, filename);
 }

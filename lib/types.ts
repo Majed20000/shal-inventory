@@ -6,6 +6,7 @@ export interface Product {
   normalizedName: string;
   category: Category;
   quantity: number;
+  cost?: number;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -29,6 +30,27 @@ export interface Payment {
   id: string;
   amount: number;
   note: string;
+  createdAt: string;
+  updatedAt?: string;
+  deletedAt?: string;
+}
+
+export interface SaleItem {
+  id: string;
+  saleId: string;
+  productId?: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  total: number;
+}
+
+export interface Sale {
+  id: string;
+  type: 'detailed' | 'quick';
+  items?: SaleItem[];
+  description: string;
+  totalAmount: number;
   createdAt: string;
   updatedAt?: string;
   deletedAt?: string;
