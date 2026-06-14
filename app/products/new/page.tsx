@@ -19,6 +19,7 @@ export default function NewProductPage() {
   const [category, setCategory] = useState('شماغ');
   const [customCategory, setCustomCategory] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [unit, setUnit] = useState('حبة');
   const [cost, setCost] = useState('');
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
@@ -84,7 +85,25 @@ export default function NewProductPage() {
       return;
     }
 
-    const result = await addOrUpdateProduct(trimmedName, selectedCategory, currentQuantity, notes.trim(), currentCost);
+    const unitSizes: Record<string, number> = {
+      'حبة': 1,
+      'نص درزن': 6,
+      'درزن': 12,
+      'كرتون': 5,
+      'كورجة': 20,
+    };
+    const selectedUnitSize = unitSizes[unit] ?? 1;
+    const totalPieces = currentQuantity * selectedUnitSize;
+
+    const result = await addOrUpdateProduct(
+      trimmedName,
+      selectedCategory,
+      totalPieces,
+      notes.trim(),
+      currentCost,
+      unit,
+      selectedUnitSize,
+    );
 
     if (result.product) {
       setMessage(
@@ -185,6 +204,18 @@ export default function NewProductPage() {
                 onChange={(event) => setQuantity(event.target.value)}
                 className="input-field"
               />
+            </label>
+
+            <label className="space-y-2 text-right text-sm font-medium text-slate-700">
+              الوحدة
+              <select value={unit} onChange={(e) => setUnit(e.target.value)} className="input-field">
+                <option>حبة</option>
+                <option>نص درزن</option>
+                <option>درزن</option>
+                <option>كرتون</option>
+                <option>كورجة</option>
+              </select>
+              <span className="block text-xs font-normal text-slate-500">اختر وحدة التعبئة للكمية المدخلة</span>
             </label>
 
             <label className="space-y-2 text-right text-sm font-medium text-slate-700">

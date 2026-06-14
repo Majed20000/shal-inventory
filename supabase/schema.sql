@@ -8,6 +8,10 @@ create table if not exists products (
   category text not null,
   quantity bigint not null default 0,
   cost numeric default 0,
+  -- وحدة التعبئة (مثال: حبة، نص درزن، درزن، كرتون، كورجة)
+  "unit" text not null default 'حبة',
+  -- عدد القطع في الوحدة (مثال: نص درزن = 6، درزن = 12)
+  "unitSize" bigint not null default 1,
   notes text default '',
   "createdAt" timestamptz not null default now(),
   "updatedAt" timestamptz not null default now(),

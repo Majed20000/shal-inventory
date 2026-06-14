@@ -25,7 +25,9 @@ export default function SalesPage() {
   const [selectedProduct, setSelectedProduct] = useState('');
   const [qty, setQty] = useState('1');
   const [price, setPrice] = useState('');
+  const [totalPrice, setTotalPrice] = useState('');
   const [items, setItems] = useState<{ productId?: string; productName: string; quantity: number; price: number }[]>([]);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [description, setDescription] = useState('');
 
   const [search, setSearch] = useState('');
@@ -83,17 +85,49 @@ export default function SalesPage() {
   const handleAddItem = () => {
     const product = products.find((p) => p.id === selectedProduct);
     const quantity = Number(qty);
-    const p = Number(price);
+    // determine per-unit price: prefer explicit price, otherwise derive from totalPrice
+    let p = price ? Number(price) : undefined;
+    const t = totalPrice ? Number(totalPrice) : undefined;
     if (!product && !selectedProduct) {
       return window.alert('اختر منتجاً أو اكتب اسم المنتج.');
     }
     if (!quantity || isNaN(quantity) || quantity <= 0) return window.alert('كمية غير صحيحة');
-    if (!p || isNaN(p) || p <= 0) return window.alert('سعر غير صحيح');
+    if ((p === undefined || isNaN(p) || p <= 0) && (t === undefined || isNaN(t) || t <= 0)) return window.alert('أدخل سعرًا للوحدة أو السعر الكلي');
     if (product && quantity > product.quantity) return window.alert('الكمية المطلوبة أكبر من المخزون');
-    setItems([...items, { productId: product?.id, productName: product?.name || selectedProduct, quantity, price: p }]);
+
+    if (p === undefined || isNaN(p) || p <= 0) {
+      // derive unit price from total
+      p = Number((t! / quantity).toFixed(4));
+    }
+
+    const newItem = { productId: product?.id, productName: product?.name || selectedProduct, quantity, price: p };
+    if (editingIndex !== null && editingIndex >= 0 && editingIndex < items.length) {
+      const copy = [...items];
+      copy[editingIndex] = newItem;
+      setItems(copy);
+      setEditingIndex(null);
+    } else {
+      setItems([...items, newItem]);
+    }
+
     setSelectedProduct('');
     setQty('1');
     setPrice('');
+    setTotalPrice('');
+  };
+
+  const handleEditItem = (idx: number) => {
+    const it = items[idx];
+    setEditingIndex(idx);
+    setSelectedProduct(it.productId || '');
+    setQty(String(it.quantity));
+    setPrice(String(it.price));
+    setTotalPrice('');
+  };
+
+  const handleRemoveItem = (idx: number) => {
+    const copy = items.filter((_, i) => i !== idx);
+    setItems(copy);
   };
 
   const handleSubmitDetailed = async () => {
@@ -172,7 +206,7 @@ export default function SalesPage() {
         <div className="md:col-span-2">
           <div className="card">
             <h3 className="mb-3 text-sm text-slate-600">بيع مفصل</h3>
-            <div className="grid gap-3 sm:grid-cols-4 items-end">
+            <div className="grid gap-3 sm:grid-cols-5 items-end">
               <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)} className="control">
                 <option value="">-- اختر منتج (أو اكتب اسم) --</option>
                 {products.map((p) => (
@@ -181,8 +215,9 @@ export default function SalesPage() {
               </select>
               <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="الكمية" className="control" type="number" />
               <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="سعر الوحدة" className="control" type="number" />
+              <input value={totalPrice} onChange={(e) => setTotalPrice(e.target.value)} placeholder="السعر الكلي (اختياري)" className="control" type="number" />
               <div>
-                <button type="button" onClick={handleAddItem} className="btn-primary small-btn">أضف عنصر</button>
+                <button type="button" onClick={handleAddItem} className="btn-primary small-btn">{editingIndex !== null ? 'تحديث عنصر' : 'أضف عنصر'}</button>
               </div>
             </div>
 
@@ -190,7 +225,7 @@ export default function SalesPage() {
               <div className="mt-4">
                 <table className="data-table w-full">
                   <thead>
-                    <tr><th>المنتج</th><th>كمية</th><th>سعر</th><th>المجموع</th></tr>
+                    <tr><th>المنتج</th><th>كمية</th><th>سعر الوحدة</th><th>المجموع</th><th>إجراءات</th></tr>
                   </thead>
                   <tbody>
                     {items.map((it, idx) => (
@@ -199,6 +234,12 @@ export default function SalesPage() {
                         <td>{it.quantity}</td>
                         <td>{it.price}</td>
                         <td>{(it.quantity * it.price).toLocaleString('en-US')}</td>
+                        <td>
+                          <div className="table-actions">
+                            <button title="تعديل" onClick={() => handleEditItem(idx)} className="icon-btn">تعديل</button>
+                            <button title="حذف" onClick={() => handleRemoveItem(idx)} className="icon-btn">حذف</button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

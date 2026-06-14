@@ -9,6 +9,8 @@ function mapProductRow(row: Record<string, unknown>): Product {
     name: String(row.name),
     normalizedName: String(row.normalizedName ?? row.normalized_name ?? ''),
     category: String(row.category),
+    unit: row.unit ? String(row.unit) : undefined,
+    unitSize: row.unitSize !== undefined && row.unitSize !== null ? Number(row.unitSize) : row.unit_size !== undefined && row.unit_size !== null ? Number(row.unit_size) : 1,
     quantity: Number(row.quantity),
     cost: row.cost !== undefined && row.cost !== null ? Number(row.cost) : Number(row.price ?? 0),
     notes: String(row.notes || ''),
@@ -99,6 +101,8 @@ export async function addOrUpdateProduct(
   quantity: number,
   notes: string,
   cost?: number,
+  unit?: string,
+  unitSize?: number,
 ): Promise<{ product: Product | null; transaction: Transaction | null; error?: string }> {
   const normalizedName = normalizeName(name);
   const now = new Date().toISOString();
@@ -127,6 +131,8 @@ export async function addOrUpdateProduct(
         updatedAt: now,
         notes: notes.trim() || existingRows.notes,
         cost: typeof cost === 'number' && !Number.isNaN(cost) ? cost : existingRows.cost ?? existingRows.price,
+        unit: unit || existingRows.unit,
+        unitSize: typeof unitSize === 'number' && !Number.isNaN(unitSize) ? unitSize : existingRows.unitSize ?? existingRows.unit_size,
       })
       .eq('id', existingRows.id)
       .select()
@@ -177,6 +183,8 @@ export async function addOrUpdateProduct(
       quantity,
       notes,
       cost: typeof cost === 'number' && !Number.isNaN(cost) ? cost : undefined,
+      unit: unit || 'حبة',
+      unitSize: typeof unitSize === 'number' && !Number.isNaN(unitSize) ? unitSize : 1,
       createdAt: now,
       updatedAt: now,
     })
@@ -246,6 +254,8 @@ export async function updateProduct(
   quantity: number,
   notes: string,
   previousQuantity: number,
+  unit?: string,
+  unitSize?: number,
 ): Promise<{ product: Product | null; transaction: Transaction | null }> {
   const normalizedName = normalizeName(name);
   const now = new Date().toISOString();
@@ -277,6 +287,8 @@ export async function updateProduct(
       category,
       quantity,
       notes,
+      unit: unit,
+      unitSize: typeof unitSize === 'number' && !Number.isNaN(unitSize) ? unitSize : undefined,
       updatedAt: now,
     })
     .eq('id', productId)

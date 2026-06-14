@@ -5,6 +5,8 @@ export interface Product {
   name: string;
   normalizedName: string;
   category: Category;
+  unit?: string;
+  unitSize?: number;
   quantity: number;
   cost?: number;
   notes: string;
