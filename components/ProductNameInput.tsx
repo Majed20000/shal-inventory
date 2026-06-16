@@ -24,10 +24,14 @@ export default function ProductNameInput({
 
   const suggestions = useMemo(() => {
     const query = normalizeName(value);
-    if (query.length < 1) return [];
+    const base = products.filter((product) => !product.deletedAt);
+    if (query.length < 1) {
+      // when input is empty, show all existing products
+      return base.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    }
 
-    return products
-      .filter((product) => !product.deletedAt && normalizeName(product.name).includes(query))
+    return base
+      .filter((product) => normalizeName(product.name).includes(query))
       .sort((a, b) => {
         const aName = normalizeName(a.name);
         const bName = normalizeName(b.name);
@@ -35,8 +39,7 @@ export default function ProductNameInput({
         const bStarts = bName.startsWith(query) ? 0 : 1;
         if (aStarts !== bStarts) return aStarts - bStarts;
         return a.name.localeCompare(b.name, 'ar');
-      })
-      .slice(0, 8);
+      });
   }, [value, products]);
 
   useEffect(() => {
@@ -64,7 +67,7 @@ export default function ProductNameInput({
           setOpen(true);
         }}
         onFocus={() => {
-          if (value.trim()) setOpen(true);
+          setOpen(true);
         }}
         className="input-field"
         placeholder={placeholder}

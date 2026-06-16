@@ -73,8 +73,10 @@ textarea {
   }
 
   .btn-primary {
-    @apply rounded-2xl bg-sand-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-sand-700;
+    @apply rounded-2xl bg-sand-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-sand-800;
   }
+
+  
 
   .btn-secondary {
     @apply rounded-xl border border-sand-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-sand-50;
@@ -96,7 +98,13 @@ textarea {
   .stat-card {
     @apply rounded-2xl bg-gradient-to-l from-sand-600 to-sand-800 text-white p-6 flex items-center gap-4;
   }
+.daily-sales-card {
+  @apply rounded-2xl text-white p-6 flex items-center gap-4;
+  background: linear-gradient(135deg, #06100d, #0e5734);
+  box-shadow: 0 12px 25px rgba(5, 150, 105, 0.35);
 
+ 
+}
   .stat-value {
     @apply text-3xl font-extrabold;
   }

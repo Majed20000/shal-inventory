@@ -55,8 +55,15 @@ export default function PaymentsPage() {
     const value = Number(amount);
     if (!value || isNaN(value)) return window.alert('أدخل قيمة صالحة للمبلغ');
     try {
-      await addPayment(value, note.trim(), date ? new Date(date).toISOString() : undefined);
-      setPayments(await loadPayments());
+      // add and use returned payment to update UI immediately
+      const newPayment = await addPayment(value, note.trim(), date ? new Date(date).toISOString() : undefined);
+      // prepend to list (addPayment may return null on failure)
+      if (newPayment) {
+        setPayments((prev) => [newPayment, ...prev]);
+      } else {
+        // fallback: reload list
+        setPayments(await loadPayments());
+      }
       setAmount('');
       setDate('');
       setNote('');
@@ -74,8 +81,9 @@ export default function PaymentsPage() {
     const newDate = prompt('تاريخ الدفع (YYYY-MM-DD أو اترك فارغاً)', new Date(p.createdAt).toISOString().slice(0, 10));
     const newNote = prompt('الوصف / الملاحظة', p.note || '') ?? '';
     try {
-      await updatePayment(p.id, parsed, newNote.trim(), newDate ? new Date(newDate).toISOString() : undefined);
-      setPayments(await loadPayments());
+      const updated = await updatePayment(p.id, parsed, newNote.trim(), newDate ? new Date(newDate).toISOString() : undefined);
+      // update local state
+      setPayments((prev) => prev.map((it) => (it.id === p.id ? updated ?? it : it)));
       window.alert('تم تحديث الدفعة.');
     } catch (err) {
       window.alert(getErrorMessage(err));
@@ -87,7 +95,7 @@ export default function PaymentsPage() {
     if (!confirmed) return;
     try {
       await deletePayment(p.id);
-      setPayments(await loadPayments());
+      setPayments((prev) => prev.filter((it) => it.id !== p.id));
       window.alert('تم حذف الدفعة.');
     } catch (err) {
       window.alert(getErrorMessage(err));

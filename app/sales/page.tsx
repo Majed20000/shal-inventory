@@ -8,6 +8,7 @@ import { getErrorMessage } from '../../lib/errors';
 import { formatDateLatin, exportSalesToExcel } from '../../lib/utils';
 import { Sale, SaleItem } from '../../lib/types';
 import { loadProducts, loadSales, addDetailedSale, addQuickSale, deleteSale } from '../../lib/db';
+import ProductNameInput from '../../components/ProductNameInput';
 
 export default function SalesPage() {
   const [loading, setLoading] = useState(true);
@@ -23,6 +24,7 @@ export default function SalesPage() {
 
   // detailed sale
   const [selectedProduct, setSelectedProduct] = useState('');
+  const [productName, setProductName] = useState('');
   const [qty, setQty] = useState('1');
   const [price, setPrice] = useState('');
   const [totalPrice, setTotalPrice] = useState('');
@@ -38,7 +40,8 @@ export default function SalesPage() {
   useEffect(() => {
     async function load() {
       try {
-        setProducts(await loadProducts());
+        const prods = await loadProducts();
+        setProducts(prods);
         setSales(await loadSales());
       } catch (err) {
         setError(getErrorMessage(err));
@@ -57,15 +60,28 @@ export default function SalesPage() {
     return sales.filter((s) => s.createdAt >= start).reduce((acc, s) => acc + Number(s.totalAmount || 0), 0);
   }, [sales]);
 
+  // daily/filtered total will be computed from the filtered list below
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+
   const filtered = useMemo(() => {
+    const q = String(search || '').trim().toLowerCase();
     return sales.filter((s) => {
-      if (filterType !== 'all' && s.type !== filterType) return false;
-      if (search && !String(s.description || '').includes(search)) return false;
       if (dateFrom && new Date(s.createdAt) < new Date(dateFrom)) return false;
       if (dateTo && new Date(s.createdAt) > new Date(dateTo)) return false;
-      return true;
+
+      if (filterType !== 'all' && s.type !== filterType) return false;
+
+      if (!q) return true;
+
+      // match description, sale id, or any item productName
+      if ((s.description || '').toLowerCase().includes(q)) return true;
+      if ((s.id || '').toLowerCase().includes(q)) return true;
+      if (s.items && s.items.some((it) => (it.productName || '').toLowerCase().includes(q))) return true;
+      return false;
     });
   }, [sales, search, dateFrom, dateTo, filterType]);
+
+  const filteredTotal = useMemo(() => filtered.reduce((acc, s) => acc + Number(s.totalAmount || 0), 0), [filtered]);
 
   const handleAddQuick = async () => {
     const value = Number(quickAmount);
@@ -83,7 +99,7 @@ export default function SalesPage() {
   };
 
   const handleAddItem = () => {
-    const product = products.find((p) => p.id === selectedProduct);
+    const product = products.find((p) => p.id === selectedProduct) || products.find((p) => p.name === productName);
     const quantity = Number(qty);
     // determine per-unit price: prefer explicit price, otherwise derive from totalPrice
     let p = price ? Number(price) : undefined;
@@ -100,7 +116,7 @@ export default function SalesPage() {
       p = Number((t! / quantity).toFixed(4));
     }
 
-    const newItem = { productId: product?.id, productName: product?.name || selectedProduct, quantity, price: p };
+    const newItem = { productId: product?.id, productName: product?.name || productName || selectedProduct, quantity, price: p };
     if (editingIndex !== null && editingIndex >= 0 && editingIndex < items.length) {
       const copy = [...items];
       copy[editingIndex] = newItem;
@@ -114,6 +130,7 @@ export default function SalesPage() {
     setQty('1');
     setPrice('');
     setTotalPrice('');
+    setProductName('');
   };
 
   const handleEditItem = (idx: number) => {
@@ -123,6 +140,7 @@ export default function SalesPage() {
     setQty(String(it.quantity));
     setPrice(String(it.price));
     setTotalPrice('');
+    setProductName(it.productName || '');
   };
 
   const handleRemoveItem = (idx: number) => {
@@ -180,13 +198,20 @@ export default function SalesPage() {
   );
 
   return (
-    <AppShell title="إدارة المبيعات اليومية (إدارة المبيعات اليومية)">
+    <AppShell title="إدارة المبيعات اليومية">
       <div className="grid gap-6 md:grid-cols-3 mb-6">
         <div className="md:col-span-1">
           <div className="stat-card">
             <div>
               <div className="text-sm text-sand-200">مجموع المبيعات</div>
               <div className="stat-value">{Number(totalSales).toLocaleString('en-US')}</div>
+            </div>
+          </div>
+          <div  className="daily-sales-card mt-4">
+            <div>
+<div className="text-sm text-sand-200">
+  مجموع المبيعات (اليومية)
+</div>              <div className="stat-value">{Number(filteredTotal).toLocaleString('en-US')}</div>
             </div>
           </div>
 
@@ -207,17 +232,27 @@ export default function SalesPage() {
           <div className="card">
             <h3 className="mb-3 text-sm text-slate-600">بيع مفصل</h3>
             <div className="grid gap-3 sm:grid-cols-5 items-end">
-              <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)} className="control">
-                <option value="">-- اختر منتج (أو اكتب اسم) --</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} — ({p.quantity})</option>
-                ))}
-              </select>
+              <div className="sm:col-span-2">
+                <ProductNameInput
+                  value={productName}
+                  onChange={(v) => {
+                    setProductName(v);
+                    // clear selectedProduct id when typing
+                    setSelectedProduct('');
+                  }}
+                  products={products}
+                  onSelectProduct={(p) => {
+                    setProductName(p.name);
+                    setSelectedProduct(p.id);
+                  }}
+                  placeholder="ابحث عن منتج أو اكتب اسم"
+                />
+              </div>
               <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="الكمية" className="control" type="number" />
               <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="سعر الوحدة" className="control" type="number" />
               <input value={totalPrice} onChange={(e) => setTotalPrice(e.target.value)} placeholder="السعر الكلي (اختياري)" className="control" type="number" />
               <div>
-                <button type="button" onClick={handleAddItem} className="btn-primary small-btn">{editingIndex !== null ? 'تحديث عنصر' : 'أضف عنصر'}</button>
+                <button type="button" onClick={handleAddItem} className="btn-primary add-large-btn">{editingIndex !== null ? 'تحديث عنصر' : 'أضف عنصر'}</button>
               </div>
             </div>
 
@@ -257,19 +292,19 @@ export default function SalesPage() {
       </div>
 
       <div className="card mb-6">
-        <div className="flex items-center gap-2">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث" className="control" />
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)} className="control">
-            <option value="all">الكل</option>
-            <option value="detailed">مفصل</option>
-            <option value="quick">سريع</option>
-          </select>
-          <input value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="control" type="date" />
-          <input value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="control" type="date" />
-          <div className="ml-auto">
-            <button onClick={handleExport} className="btn-primary small-btn">تصدير</button>
+          <div className="flex items-center gap-2">
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث" className="control" />
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)} className="control">
+              <option value="all">الكل</option>
+              <option value="detailed">مفصل</option>
+              <option value="quick">سريع</option>
+            </select>
+            <input value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="control" type="date" />
+            <input value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="control" type="date" />
+            <div className="ml-auto">
+              <button onClick={handleExport} className="btn-primary small-btn">تصدير</button>
+            </div>
           </div>
-        </div>
       </div>
 
       <section className="card">
@@ -292,7 +327,7 @@ export default function SalesPage() {
                 </tr>
               ) : (
                 filtered.map((s, idx) => (
-                  <tr key={s.id} className="hover:shadow-sm">
+                  <tr key={s.id} className="hover:shadow-sm cursor-pointer" onClick={() => setSelectedSale(s)}>
                     <td>{idx + 1}</td>
                     <td>{s.type === 'detailed' ? 'مفصل' : 'سريع'}</td>
                     <td>{s.description || (s.items && s.items.length ? s.items.map((it) => it.productName).join(', ') : '—')}</td>
@@ -300,7 +335,7 @@ export default function SalesPage() {
                     <td className="whitespace-nowrap">{formatDateLatin(s.createdAt)}</td>
                     <td>
                       <div className="table-actions">
-                        <button title="حذف" onClick={() => handleDeleteSale(s)} className="icon-btn" aria-label="delete">حذف</button>
+                        <button title="حذف" onClick={(e) => { e.stopPropagation(); handleDeleteSale(s); }} className="icon-btn" aria-label="delete">حذف</button>
                       </div>
                     </td>
                   </tr>
@@ -310,6 +345,38 @@ export default function SalesPage() {
           </table>
         </div>
       </section>
+      {selectedSale ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="card max-w-3xl w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">تفاصيل البيع — {selectedSale.id}</h3>
+              <div>
+                <button onClick={() => setSelectedSale(null)} className="btn-secondary small-btn">إغلاق</button>
+              </div>
+            </div>
+            <div className="mb-4 text-sm text-slate-600">النوع: {selectedSale.type === 'detailed' ? 'مفصل' : 'سريع'} · التاريخ: {formatDateLatin(selectedSale.createdAt)}</div>
+            {selectedSale.items && selectedSale.items.length > 0 ? (
+              <table className="data-table w-full">
+                <thead>
+                  <tr><th>المنتج</th><th>كمية</th><th>سعر</th><th>المجموع</th></tr>
+                </thead>
+                <tbody>
+                  {selectedSale.items.map((it) => (
+                    <tr key={it.id}>
+                      <td>{it.productName}</td>
+                      <td>{it.quantity}</td>
+                      <td>{it.price}</td>
+                      <td>{Number(it.total).toLocaleString('en-US')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="text-sm text-slate-500">لا توجد عناصر في هذا البيع.</div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   );
 }
