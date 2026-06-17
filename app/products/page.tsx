@@ -55,6 +55,9 @@ export default function ProductsPage() {
       'اسم المنتج': product.name,
       التصنيف: product.category,
       الكمية: product.quantity,
+      الوحدة: product.unit ?? 'حبة',
+      'حجم الوحدة': product.unitSize ?? 1,
+      'سعر/تكلفة': Number(product.cost ?? 0),
       'تاريخ الإضافة': formatDate(product.createdAt),
       'آخر تحديث': formatDate(product.updatedAt),
       الملاحظات: product.notes,
@@ -124,6 +127,9 @@ export default function ProductsPage() {
                 <th>اسم المنتج</th>
                 <th>التصنيف</th>
                 <th>الكمية</th>
+                <th>الوحدة</th>
+                <th>حجم الوحدة</th>
+                <th>سعر/تكلفة</th>
                 <th>آخر تحديث</th>
                 <th>إجراءات</th>
               </tr>
@@ -144,11 +150,14 @@ export default function ProductsPage() {
                       <span className="rounded-lg bg-sand-100 px-2 py-1 text-xs">{product.category}</span>
                     </td>
                     <td className={product.quantity <= 5 ? 'font-semibold text-amber-700' : ''}>{product.quantity}</td>
+                    <td>{product.unit ?? 'حبة'}</td>
+                    <td>{product.unitSize ?? 1}</td>
+                    <td className="font-medium">{Number(product.cost ?? 0).toLocaleString('en-US')}</td>
                     <td className="whitespace-nowrap">{formatDate(product.updatedAt)}</td>
                     <td>
                       <div className="flex flex-wrap gap-2">
                         <Link href={`/products/${product.id}`} className="btn-secondary !px-3 !py-1.5">
-                          عرض
+                          عرض / تعديل
                         </Link>
                         <button type="button" onClick={() => handleDelete(product)} className="btn-danger !px-3 !py-1.5">
                           حذف

@@ -254,6 +254,7 @@ export async function updateProduct(
   quantity: number,
   notes: string,
   previousQuantity: number,
+  cost?: number,
   unit?: string,
   unitSize?: number,
 ): Promise<{ product: Product | null; transaction: Transaction | null }> {
@@ -287,6 +288,7 @@ export async function updateProduct(
       category,
       quantity,
       notes,
+      cost: typeof cost === 'number' && !Number.isNaN(cost) ? cost : undefined,
       unit: unit,
       unitSize: typeof unitSize === 'number' && !Number.isNaN(unitSize) ? unitSize : undefined,
       updatedAt: now,

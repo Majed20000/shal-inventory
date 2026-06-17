@@ -26,6 +26,9 @@ function ProductDetailsClient({ productId }: { productId: string }) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [customCategory, setCustomCategory] = useState('');
+  const [unit, setUnit] = useState('حبة');
+  const [unitSize, setUnitSize] = useState('1');
+  const [cost, setCost] = useState('');
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
@@ -42,6 +45,9 @@ function ProductDetailsClient({ productId }: { productId: string }) {
           setProduct(item);
           setName(item.name);
           setCategory(item.category);
+          setUnit(item.unit ?? 'حبة');
+          setUnitSize(String(item.unitSize ?? 1));
+          setCost(item.cost !== undefined && item.cost !== null ? String(item.cost) : '');
           setQuantity(String(item.quantity));
           setNotes(item.notes);
         }
@@ -110,6 +116,7 @@ function ProductDetailsClient({ productId }: { productId: string }) {
     }
 
     try {
+      const parsedCost = cost ? Number(cost) : 0;
       const result = await updateProduct(
         product.id,
         trimmedName,
@@ -117,6 +124,9 @@ function ProductDetailsClient({ productId }: { productId: string }) {
         currentQuantity,
         notes.trim(),
         product.quantity,
+        parsedCost,
+        unit,
+        Number(unitSize),
       );
 
       if (result.product) {
@@ -142,6 +152,9 @@ function ProductDetailsClient({ productId }: { productId: string }) {
           'اسم المنتج': product.name,
           التصنيف: product.category,
           الكمية: product.quantity,
+          الوحدة: product.unit ?? 'حبة',
+          'حجم الوحدة': product.unitSize ?? 1,
+          'سعر/تكلفة': Number(product.cost ?? 0),
           'تاريخ الإضافة': formatDate(product.createdAt),
           'آخر تحديث': formatDate(product.updatedAt),
           الملاحظات: product.notes,
@@ -197,6 +210,27 @@ function ProductDetailsClient({ productId }: { productId: string }) {
                 ))}
                 <option>أخرى</option>
               </select>
+            </label>
+            <label className="space-y-2 text-right text-sm font-medium text-slate-700">
+              الوحدة
+              <select value={unit} onChange={(e) => setUnit(e.target.value)} className="input-field">
+                <option>حبة</option>
+                <option>نص درزن</option>
+                <option>درزن</option>
+                <option>كرتون</option>
+                <option>كورجة</option>
+                <option>أخرى</option>
+              </select>
+            </label>
+
+            <label className="space-y-2 text-right text-sm font-medium text-slate-700">
+              حجم الوحدة (عدد القطع)
+              <input value={unitSize} onChange={(e) => setUnitSize(e.target.value)} className="input-field" />
+            </label>
+
+            <label className="space-y-2 text-right text-sm font-medium text-slate-700">
+              سعر/تكلفة الوحدة
+              <input value={cost} onChange={(e) => setCost(e.target.value)} className="input-field" type="number" step="0.01" min="0" />
             </label>
             {category === 'أخرى' ? (
               <label className="space-y-2 text-right text-sm font-medium text-slate-700">
