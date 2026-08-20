@@ -378,7 +378,7 @@ function mapPaymentRow(row: Record<string, unknown>): Payment {
   return {
     id: String(row.id),
     amount: Number(row.amount),
-    note: String(row.note || ''),
+    note: String(row.note ?? row.description ?? ''),
     createdAt: String(row.createdAt ?? row.created_at ?? ''),
     updatedAt: row.updatedAt || row.updated_at ? String(row.updatedAt ?? row.updated_at) : undefined,
     deletedAt: row.deletedAt || row.deleted_at ? String(row.deletedAt ?? row.deleted_at) : undefined,
@@ -403,7 +403,7 @@ export async function addPayment(amount: number, note = '', createdAt?: string):
   const id = createId('pay');
   const { data, error } = await client
     .from('payments')
-    .insert({ id, amount, note, createdAt: now, updatedAt: now })
+    .insert({ id, amount, note: note.trim(), createdAt: now, updatedAt: now })
     .select()
     .single();
 
@@ -418,7 +418,7 @@ export async function addPayment(amount: number, note = '', createdAt?: string):
 export async function updatePayment(paymentId: string, amount: number, note = '', createdAt?: string): Promise<Payment | null> {
   const client = requireSupabase();
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = { amount, note, updatedAt: now };
+  const updates: Record<string, unknown> = { amount, note: note.trim(), updatedAt: now };
   if (createdAt) updates.createdAt = createdAt;
 
   const { data, error } = await client.from('payments').update(updates).eq('id', paymentId).select().single();
@@ -477,7 +477,11 @@ export async function loadSales(): Promise<(Sale & { items?: SaleItem[] })[]> {
   // load items for these sales
   const saleIds = sales.map((s) => s.id);
   if (saleIds.length === 0) return sales;
-  const { data: itemsData, error: itemsError } = await client.from('sale_items').select('*').in('saleId', saleIds);
+  const { data: itemsData, error: itemsError } = await client
+    .from('sale_items')
+    .select('*')
+    .in('saleId', saleIds)
+    .is('deletedAt', null);
   if (itemsError) {
     console.error('Supabase loadSales items error', itemsError);
     throw itemsError;
@@ -511,8 +515,15 @@ export async function addDetailedSale(items: { productId?: string; productName: 
   }
 
   const totalAmount = items.reduce((s, it) => s + it.quantity * it.price, 0);
+  const trimmedDescription = description.trim();
+  const itemNames = items.map((it) => it.productName.trim()).filter(Boolean);
+  const finalDescription = trimmedDescription || itemNames.join('، ');
 
-  const { data: saleData, error: saleError } = await client.from('sales').insert({ id: saleId, type: 'detailed', description, totalAmount, createdAt: now, updatedAt: now }).select().single();
+  const { data: saleData, error: saleError } = await client
+    .from('sales')
+    .insert({ id: saleId, type: 'detailed', description: finalDescription, totalAmount, createdAt: now, updatedAt: now })
+    .select()
+    .single();
   if (saleError) {
     console.error('Supabase addDetailedSale sale insert error', saleError);
     throw saleError;
@@ -553,7 +564,7 @@ export async function addDetailedSale(items: { productId?: string; productName: 
         quantityBefore,
         quantityChange: -it.quantity,
         quantityAfter,
-        notes: `بيع - ${description}`,
+        notes: finalDescription ? `بيع - ${finalDescription}` : 'بيع',
         createdAt: now,
       });
     }
@@ -566,7 +577,13 @@ export async function addQuickSale(amount: number, description = '', createdAt?:
   const client = requireSupabase();
   const now = createdAt ?? new Date().toISOString();
   const id = createId('sale');
-  const { data, error } = await client.from('sales').insert({ id, type: 'quick', description, totalAmount: amount, createdAt: now, updatedAt: now }).select().single();
+  const trimmedDescription = description.trim();
+  const finalDescription = trimmedDescription || `بيع سريع - ${amount.toLocaleString('en-US')}`;
+  const { data, error } = await client
+    .from('sales')
+    .insert({ id, type: 'quick', description: finalDescription, totalAmount: amount, createdAt: now, updatedAt: now })
+    .select()
+    .single();
   if (error) {
     console.error('Supabase addQuickSale error', error);
     throw error;

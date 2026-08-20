@@ -102,3 +102,31 @@ export function exportSalesToExcel(columns: string[], rows: Array<Record<string,
   const filename = `alshal_alarabi_sales_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(workbook, filename);
 }
+
+/** الوصف المعروض للبيع — يجمع بين الحقل المحفوظ وأسماء العناصر */
+export function getSaleDescription(sale: {
+  type?: string;
+  description?: string;
+  totalAmount?: number;
+  items?: { productName?: string }[];
+}): string {
+  const saved = sale.description?.trim();
+  if (saved) return saved;
+
+  const itemNames = (sale.items || [])
+    .map((item) => item.productName?.trim())
+    .filter(Boolean) as string[];
+  if (itemNames.length) return itemNames.join('، ');
+
+  if (sale.type === 'quick') {
+    const amount = Number(sale.totalAmount || 0);
+    return amount ? `بيع سريع - ${amount.toLocaleString('en-US')}` : 'بيع سريع';
+  }
+
+  return '';
+}
+
+/** الوصف المعروض للدفعة — يدعم note و description */
+export function getPaymentNote(payment: { note?: string }): string {
+  return payment.note?.trim() || '';
+}

@@ -5,7 +5,7 @@ import AppShell from '../../components/AppShell';
 import LoadingState from '../../components/LoadingState';
 import ErrorState from '../../components/ErrorState';
 import { getErrorMessage } from '../../lib/errors';
-import { formatDateLatin, exportSalesToExcel } from '../../lib/utils';
+import { formatDateLatin, exportSalesToExcel, getSaleDescription } from '../../lib/utils';
 import { Sale, SaleItem } from '../../lib/types';
 import { loadProducts, loadSales, addDetailedSale, addQuickSale, deleteSale } from '../../lib/db';
 import ProductNameInput from '../../components/ProductNameInput';
@@ -36,6 +36,10 @@ export default function SalesPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'detailed' | 'quick'>('all');
+  const [showSalesTotals, setShowSalesTotals] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [salesPassword, setSalesPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -74,7 +78,7 @@ export default function SalesPage() {
       if (!q) return true;
 
       // match description, sale id, or any item productName
-      if ((s.description || '').toLowerCase().includes(q)) return true;
+      if (getSaleDescription(s).toLowerCase().includes(q)) return true;
       if ((s.id || '').toLowerCase().includes(q)) return true;
       if (s.items && s.items.some((it) => (it.productName || '').toLowerCase().includes(q))) return true;
       return false;
@@ -82,6 +86,28 @@ export default function SalesPage() {
   }, [sales, search, dateFrom, dateTo, filterType]);
 
   const filteredTotal = useMemo(() => filtered.reduce((acc, s) => acc + Number(s.totalAmount || 0), 0), [filtered]);
+
+  const handleToggleSalesTotals = () => {
+    if (showSalesTotals) {
+      setShowSalesTotals(false);
+      return;
+    }
+    setPasswordError('');
+    setSalesPassword('');
+    setShowPasswordDialog(true);
+  };
+
+  const handleSalesPasswordChange = (value: string) => {
+    setSalesPassword(value);
+    setPasswordError('');
+    if (value === '2000') {
+      setShowSalesTotals(true);
+      setShowPasswordDialog(false);
+      setSalesPassword('');
+    } else if (value.length >= 4) {
+      setPasswordError('الرمز غير صحيح');
+    }
+  };
 
   const handleAddQuick = async () => {
     const value = Number(quickAmount);
@@ -177,7 +203,7 @@ export default function SalesPage() {
       'رقم': i + 1,
       'معرف البيع': s.id,
       'النوع': s.type,
-      'الوصف': s.description || '—',
+      'الوصف': getSaleDescription(s) || '—',
       'المبلغ الإجمالي': s.totalAmount,
       'التاريخ': formatDateLatin(s.createdAt),
     }));
@@ -202,18 +228,58 @@ export default function SalesPage() {
       <div className="grid gap-6 md:grid-cols-3 mb-6">
         <div className="md:col-span-1">
           <div className="stat-card">
-            <div>
+            <div className="flex-1">
               <div className="text-sm text-sand-200">مجموع المبيعات</div>
-              <div className="stat-value">{Number(totalSales).toLocaleString('en-US')}</div>
+              <div className="stat-value">{showSalesTotals ? Number(totalSales).toLocaleString('en-US') : '••••••'}</div>
             </div>
+            <button
+              type="button"
+              onClick={handleToggleSalesTotals}
+              className="icon-btn border-white/20 bg-white/10 text-white hover:bg-white/20"
+              aria-label={showSalesTotals ? 'إخفاء مجموع المبيعات' : 'إظهار مجموع المبيعات'}
+              title={showSalesTotals ? 'إخفاء المجموع' : 'إظهار المجموع'}
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                {showSalesTotals ? <circle cx="12" cy="12" r="2.5" /> : <path d="m4 4 16 16" />}
+              </svg>
+            </button>
           </div>
           <div  className="daily-sales-card mt-4">
-            <div>
-<div className="text-sm text-sand-200">
-  مجموع المبيعات (اليومية)
-</div>              <div className="stat-value">{Number(filteredTotal).toLocaleString('en-US')}</div>
+            <div className="flex-1">
+              <div className="text-sm text-sand-200">مجموع المبيعات (اليومية)</div>
+              <div className="stat-value">{showSalesTotals ? Number(filteredTotal).toLocaleString('en-US') : '••••••'}</div>
             </div>
+            <button
+              type="button"
+              onClick={handleToggleSalesTotals}
+              className="icon-btn border-white/20 bg-white/10 text-white hover:bg-white/20"
+              aria-label={showSalesTotals ? 'إخفاء مجموع المبيعات اليومية' : 'إظهار مجموع المبيعات اليومية'}
+              title={showSalesTotals ? 'إخفاء المجموع' : 'إظهار المجموع'}
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                {showSalesTotals ? <circle cx="12" cy="12" r="2.5" /> : <path d="m4 4 16 16" />}
+              </svg>
+            </button>
           </div>
+
+          {showPasswordDialog ? (
+            <div className="mt-4" role="dialog" aria-label="رمز الدخول">
+              <input
+                autoFocus
+                value={salesPassword}
+                onChange={(event) => handleSalesPasswordChange(event.target.value)}
+                className="control border-sand-300 shadow-sm"
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="اكتب الرمز"
+                aria-label="رمز الدخول"
+              />
+              {passwordError ? <p className="mt-1 text-sm text-red-600">{passwordError}</p> : null}
+            </div>
+          ) : null}
 
           <div className="card mt-4">
             <h3 className="mb-3 text-sm text-slate-600">بيع سريع</h3>
@@ -330,7 +396,7 @@ export default function SalesPage() {
                   <tr key={s.id} className="hover:shadow-sm cursor-pointer" onClick={() => setSelectedSale(s)}>
                     <td>{idx + 1}</td>
                     <td>{s.type === 'detailed' ? 'مفصل' : 'سريع'}</td>
-                    <td>{s.description || (s.items && s.items.length ? s.items.map((it) => it.productName).join(', ') : '—')}</td>
+                    <td>{getSaleDescription(s) || '—'}</td>
                     <td className="font-medium">{Number(s.totalAmount).toLocaleString('en-US')}</td>
                     <td className="whitespace-nowrap">{formatDateLatin(s.createdAt)}</td>
                     <td>

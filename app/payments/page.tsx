@@ -5,7 +5,7 @@ import AppShell from '../../components/AppShell';
 import ErrorState from '../../components/ErrorState';
 import LoadingState from '../../components/LoadingState';
 import { getErrorMessage } from '../../lib/errors';
-import { formatDateLatin, exportPaymentsToExcel } from '../../lib/utils';
+import { formatDateLatin, exportPaymentsToExcel, getPaymentNote } from '../../lib/utils';
 import { Payment } from '../../lib/types';
 import { addPayment, deletePayment, loadPayments, updatePayment } from '../../lib/db';
 
@@ -42,7 +42,7 @@ export default function PaymentsPage() {
   const filtered = useMemo(() => {
     const s = search.trim();
     return payments.filter((p) => {
-      if (s && !p.note.includes(s)) return false;
+      if (s && !getPaymentNote(p).includes(s)) return false;
       if (minAmount && Number(p.amount) < Number(minAmount)) return false;
       if (maxAmount && Number(p.amount) > Number(maxAmount)) return false;
       if (dateFrom && new Date(p.createdAt) < new Date(dateFrom)) return false;
@@ -107,7 +107,7 @@ export default function PaymentsPage() {
       'رقم': i + 1,
       'المبلغ': p.amount,
       'التاريخ': formatDateLatin(p.createdAt),
-      'الوصف': p.note || '—',
+      'الوصف': getPaymentNote(p) || '—',
       'آخر تعديل': p.updatedAt ? formatDateLatin(p.updatedAt) : '—',
     }));
     exportPaymentsToExcel(['رقم', 'المبلغ', 'التاريخ', 'الوصف', 'آخر تعديل'], rows);
@@ -228,7 +228,7 @@ export default function PaymentsPage() {
                     <td>{index + 1}</td>
                     <td className="font-medium text-slate-800">{Number(p.amount).toLocaleString('en-US')}</td>
                     <td className="whitespace-nowrap">{formatDateLatin(p.createdAt)}</td>
-                    <td>{p.note || '—'}</td>
+                    <td>{getPaymentNote(p) || '—'}</td>
                     <td className="whitespace-nowrap">{p.updatedAt ? formatDateLatin(p.updatedAt) : '—'}</td>
                     <td>
                       <div className="table-actions">
