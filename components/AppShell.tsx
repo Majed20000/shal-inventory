@@ -15,6 +15,7 @@ const navItems = [
   { href: '/transactions', label: 'سجل العمليات' },
   { href: '/payments', label: 'المصاريف والمدفوعات' },
   { href: '/sales', label: 'المبيعات' },
+  { href: '/analytics', label: 'الأرباح والتحليلات' },
 ];
 
 function isActive(pathname: string, href: string) {

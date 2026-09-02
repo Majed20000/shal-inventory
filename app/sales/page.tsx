@@ -396,7 +396,7 @@ export default function SalesPage() {
                   <tr key={s.id} className="hover:shadow-sm cursor-pointer" onClick={() => setSelectedSale(s)}>
                     <td>{idx + 1}</td>
                     <td>{s.type === 'detailed' ? 'مفصل' : 'سريع'}</td>
-                    <td>{getSaleDescription(s) || '—'}</td>
+                    <td className="max-w-[24rem] whitespace-normal break-words">{getSaleDescription(s) || '—'}</td>
                     <td className="font-medium">{Number(s.totalAmount).toLocaleString('en-US')}</td>
                     <td className="whitespace-nowrap">{formatDateLatin(s.createdAt)}</td>
                     <td>
@@ -412,34 +412,57 @@ export default function SalesPage() {
         </div>
       </section>
       {selectedSale ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="card max-w-3xl w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">تفاصيل البيع — {selectedSale.id}</h3>
-              <div>
-                <button onClick={() => setSelectedSale(null)} className="btn-secondary small-btn">إغلاق</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="card max-w-4xl w-full max-h-[90vh] overflow-hidden border-sand-200 bg-white p-0">
+            <div className="flex items-center justify-between border-b border-sand-200 bg-gradient-to-l from-sand-50 via-white to-sand-50 px-6 py-4">
+              <button onClick={() => setSelectedSale(null)} className="btn-secondary small-btn">إغلاق</button>
+              <div className="text-right">
+                <p className="text-xs font-medium text-sand-700">تفاصيل البيع</p>
+                <h3 className="mt-1 text-lg font-bold text-slate-900">{selectedSale.id}</h3>
               </div>
             </div>
-            <div className="mb-4 text-sm text-slate-600">النوع: {selectedSale.type === 'detailed' ? 'مفصل' : 'سريع'} · التاريخ: {formatDateLatin(selectedSale.createdAt)}</div>
-            {selectedSale.items && selectedSale.items.length > 0 ? (
-              <table className="data-table w-full">
-                <thead>
-                  <tr><th>المنتج</th><th>كمية</th><th>سعر</th><th>المجموع</th></tr>
-                </thead>
-                <tbody>
-                  {selectedSale.items.map((it) => (
-                    <tr key={it.id}>
-                      <td>{it.productName}</td>
-                      <td>{it.quantity}</td>
-                      <td>{it.price}</td>
-                      <td>{Number(it.total).toLocaleString('en-US')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="text-sm text-slate-500">لا توجد عناصر في هذا البيع.</div>
-            )}
+
+            <div className="max-h-[calc(90vh-88px)] overflow-y-auto p-6">
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                  <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1.5 font-medium text-sand-700">
+                    {selectedSale.type === 'detailed' ? 'مفصل' : 'سريع'}
+                  </span>
+                  <span className="text-slate-400">•</span>
+                  <span>{formatDateLatin(selectedSale.createdAt)}</span>
+                  <span className="mr-auto rounded-full bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700">
+                    {Number(selectedSale.totalAmount).toLocaleString('en-US')} ر.س
+                  </span>
+                </div>
+
+                {selectedSale.items && selectedSale.items.length > 0 ? (
+                  <div className="overflow-hidden rounded-2xl border border-sand-200">
+                    <table className="data-table w-full">
+                      <thead>
+                        <tr><th>المنتج</th><th>كمية</th><th>سعر</th><th>المجموع</th></tr>
+                      </thead>
+                      <tbody>
+                        {selectedSale.items.map((it) => (
+                          <tr key={it.id || `${it.productName}-${it.quantity}`}>
+                            <td>{it.productName}</td>
+                            <td>{it.quantity}</td>
+                            <td>{Number(it.price).toLocaleString('en-US')}</td>
+                            <td>{Number(it.total || it.quantity * it.price).toLocaleString('en-US')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50 p-4 text-right">
+                    <div className="mb-2 text-xs font-medium text-sand-700">الوصف</div>
+                    <div className="whitespace-pre-line text-sm leading-7 text-slate-700">
+                      {getSaleDescription(selectedSale) || '—'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
